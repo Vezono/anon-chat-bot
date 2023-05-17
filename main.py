@@ -7,7 +7,7 @@ from mongoengine import connect
 import random
 import string
 import time
-from config import mongourl, bot_token
+from config import mongourl, bot_token, admin
 
 connect(host=mongourl, db='mfhorning')
 bot = TeleBot(bot_token)
@@ -18,9 +18,18 @@ def generate_id():
 
 
 def get_reply_number(m, anon):
-    num = Message.objects.get(pairs__in=[f"{m.from_user.id} - {m.reply_to_message.message_id}"]).pairs
+    message = Message.objects.get(pairs__in=[f"{m.from_user.id} - {m.reply_to_message.message_id}"])
+    num = message.pairs
     num = [pair for pair in num if f"{anon.id}" in pair][0].split(' - ')[1]
     return num
+
+
+def get_origin(m):
+    try:
+        return Message.objects.get(pairs__in=[f"{m.from_user.id} - {m.reply_to_message.message_id}"])
+    except:
+        print(traceback.format_exc())
+        return
 
 
 def format_time(seconds):
@@ -88,6 +97,14 @@ def nick_handler(m):
     bot.reply_to(m, tts)
 
 
+@bot.message_handler(chat_types=['private'], commands=['debug'])
+def nick_handler(m):
+    if m.from_user.id != admin or not m.reply_to_message:
+        return
+
+    bot.reply_to(m, f"[DEBUG]:\n\nORIGIN: {get_origin(m).to_json()}\n")
+
+
 @bot.message_handler(chat_types=['private'], commands=['emoji'])
 def nick_handler(m):
     if m.text.count(' ') < 1:
@@ -117,11 +134,65 @@ def nick_handler(m):
     if m.text.count(' ') < 1 or len(m.text) > 30:
         bot.reply_to(m, '[BOT]: Использовать так - /nick твой ник. И не слишком длинно!!!')
         return
-    nick = m.text.split(' ', 1)[1]
+    nick = m.text.split(' ', 1)[1].replace('<', '&lt;').replace('>', '&gt;')
+    if "#" in nick:
+        bot.reply_to(m, '[BOT]: Нельзя хештеги.')
+        return
     user = get_user(m)
     user.name = nick
     user.save()
     bot.reply_to(m, '[BOT]: Ник сохранен!')
+
+
+@bot.message_handler(chat_types=['private'], commands=['msg', 'pm'])
+def nick_handler(m):
+    if not m.reply_to_message:
+        bot.reply_to(m, '[BOT]: Реплай на юзера, которому хотите написать приватное сообщение!')
+        return
+    if m.text.count(' ') < 1:
+        bot.reply_to(m, '[BOT]: Использовать так - /nick твой ник. И не слишком длинно!!!')
+        return
+    text = m.text.split(' ', 1)[1].replace('<', '&lt;').replace('>', '&gt;')
+    user = get_user(m)
+    message = get_origin(m)
+    if not message:
+        bot.reply_to(m, 'Ошибка!')
+        return
+    if message.origin == 'NO_ORIGIN':
+        bot.reply_to(m, 'Ошибка!')
+        return
+    anon = User.objects.get(id=int(message.origin.split(' - ')[0]))
+    anonm = bot.send_message(anon.id, f'[PM] {user.nick}: {text}')
+    userm = bot.send_message(user.id, f'[PM to {anon.nick}]: {text}')
+    message = Message(origin=f"{user.id} - {userm.message_id}", private=True, pairs=[f'{anon.id} - {anonm.message_id}', f'{user.id} - {userm.message_id}'])
+    message.save()
+
+
+@bot.message_handler(chat_types=['private'], content_types=['text'])
+def pm_handler(m):
+    user = get_user(m)
+    update_online(user)
+    m.text = m.text.replace('<', '&lt;').replace('>', '&gt;')
+    message_keys = []
+    for anon in User.objects:
+        if m.reply_to_message:
+            message = get_origin(m)
+            if message:
+                if message.private:
+                    bot.reply_to(m, '[BOT] сорян, еще не запилил')
+                    return
+            try:
+                num = get_reply_number(m, anon)
+                botm = bot.send_message(anon.id, f'<b>{user.nick}</b>: {m.text}',
+                                        reply_to_message_id=num, parse_mode="HTML")
+            except:
+                print(traceback.format_exc())
+                botm = bot.send_message(anon.id, f'<b>{user.nick}</b>: {m.text}', parse_mode="HTML")
+        else:
+            botm = bot.send_message(anon.id, f'<b>{user.nick}</b>: {m.text}', parse_mode="HTML")
+        message_keys.append(f"{anon.id} - {botm.message_id}")
+    message = Message(pairs=message_keys, origin=f"{m.from_user.id} - {m.message_id}")
+    message.save()
 
 
 @bot.message_handler(chat_types=['private'], content_types=['animation'])
@@ -145,7 +216,7 @@ def pm_handler(m):
             botm = bot.send_animation(anon.id, gif,
                                   caption=f"{user.nick}: {caption if caption else ''}")
         message_keys.append(f"{anon.id} - {botm.message_id}")
-    message = Message(pairs=message_keys)
+    message = Message(pairs=message_keys, origin=f"{m.from_user.id} - {m.message_id}")
     message.save()
 
 
@@ -168,7 +239,7 @@ def pm_handler(m):
         else:
             botm = bot.send_sticker(anon.id, sticker, reply_markup=keyboard)
         message_keys.append(f"{anon.id} - {botm.message_id}")
-    message = Message(pairs=message_keys)
+    message = Message(pairs=message_keys, origin=f"{m.from_user.id} - {m.message_id}")
     message.save()
 
 
@@ -193,29 +264,10 @@ def pm_handler(m):
             botm = bot.send_photo(anon.id, photo,
                                       caption=f"{user.nick}: {caption if caption else ''}")
         message_keys.append(f"{anon.id} - {botm.message_id}")
-    message = Message(pairs=message_keys)
-    message.save()
-
-
-@bot.message_handler(chat_types=['private'], content_types=['text'])
-def pm_handler(m):
-    user = get_user(m)
-    update_online(user)
-    message_keys = []
-    for anon in User.objects:
-        if m.reply_to_message:
-            try:
-                num = get_reply_number(m, anon)
-                botm = bot.send_message(anon.id, f'<b>{user.nick}</b>: {m.text}',
-                                        reply_to_message_id=num, parse_mode="HTML")
-            except:
-                print(traceback.format_exc())
-                botm = bot.send_message(anon.id, f'<b>{user.nick}</b>: {m.text}', parse_mode="HTML")
-        else:
-            botm = bot.send_message(anon.id, f'<b>{user.nick}</b>: {m.text}', parse_mode="HTML")
-        message_keys.append(f"{anon.id} - {botm.message_id}")
     message = Message(pairs=message_keys, origin=f"{m.from_user.id} - {m.message_id}")
     message.save()
+
+
 
 
 print(7777)

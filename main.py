@@ -83,7 +83,7 @@ def edited_handler(m):
         return
     for anon in User.objects:
         num = [pair for pair in pairs if f"{anon.id}" in pair][0].split(' - ')[1]
-        bot.edit_message_text(f'#<b>{user.anon_key}</b>: {m.text}', anon.id, num, parse_mode="HTML")
+        bot.edit_message_text(f'#<b>{user.nick}</b>: {m.text}', anon.id, num, parse_mode="HTML")
 
 
 @bot.message_handler(chat_types=['private'], commands=['list'])

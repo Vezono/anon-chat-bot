@@ -9,7 +9,9 @@ import string
 import time
 from config import mongourl, bot_token, admin
 from MessageManager import MessageManager
-
+from utils import format_time
+from telebot.apihelper import ApiTelegramException
+from exceptions import blocked_exception, replied_message_exception
 
 connect(host=mongourl, db='mfhorning')
 bot = TeleBot(bot_token)
@@ -22,26 +24,11 @@ def generate_id():
     return ''.join(random.choice(string.ascii_uppercase) for _ in range(5))
 
 
-def format_time(seconds):
-    minutes = seconds // 60
-    hours = minutes // 60
-    days = hours // 24
-    weeks = days // 7
-    if weeks:
-        return f'{weeks} недель'
-    elif days:
-        return f'{days} дней'
-    elif hours:
-        return f'{hours} часов'
-    elif minutes:
-        return f'{minutes} минут'
-    else:
-        return f'{seconds} секунд'
-
-
 def get_user(m):
     try:
         user = User.objects.get(id=m.from_user.id)
+        user.skipped = False
+        user.save()
     except:
         id = generate_id()
         user = User(id=m.from_user.id, anon_key=id, room=rooms[0])
@@ -82,11 +69,7 @@ def nick_handler(m):
     for room in rooms:
         tts += f'\n<b>{room}</b>:\n'
         for anon in User.objects(room=room).order_by('-online'):
-            online = format_time(int(time.time() - anon.online))
-            if anon.online != 0:
-                tts += f'{anon.emoji_link}{anon.name} (#{anon.anon_key}) - писал {online} назад\n'
-            else:
-                tts += f'{anon.emoji_link}{anon.name} (#{anon.anon_key})\n'
+            tts += f'{anon.list_entry}\n'
     bot.reply_to(m, tts, parse_mode='HTML')
 
 
@@ -94,8 +77,7 @@ def nick_handler(m):
 def nick_handler(m):
     if m.from_user.id != admin or not m.reply_to_message:
         return
-
-    bot.reply_to(m, f"[DEBUG]:\n\nORIGIN: {mm.get_origin(m).to_json()}\n")
+    bot.reply_to(m, f"[DEBUG]:\n\nORIGIN: {mm.get_message(m).to_json()}\n")
 
 
 @bot.message_handler(chat_types=['private'], commands=['emoji'])
@@ -116,21 +98,20 @@ def nick_handler(m):
 @bot.message_handler(chat_types=['private'], commands=['start'])
 def nick_handler(m):
     user = get_user(m)
-    if m.text.count(' ') == 1:
-        anon_id = m.text.split(' ')[1]
-        if anon_id.isalpha() and len(anon_id) == 5:
-            try:
-                anon = User.objects.get(anon_key=anon_id)
-                bot.reply_to(m, f'Профиль {anon.emoji}{anon.nick}:\n\n{anon.bio}')
-            except:
-                pass
-            return
     bot.reply_to(m, '[BOT]: Командьі: \n\n'
                     '/nick - сменить ник\n'
                     '/list - список челиков (без деанона)\n'
                     '/emoji - сменить свое емоджи\n'
                     '/bio - сменить био\n'
                     '/switch - переключить комнату')
+    if not m.text.count(' ') == 1:
+        return
+    anon_id = m.text.split(' ')[1]
+    try:
+        anon = User.objects.get(anon_key=anon_id)
+        bot.reply_to(m, f'Профиль {anon.emoji}{anon.nick}:\n\n{anon.bio}')
+    except:
+        pass
 
 
 @bot.message_handler(chat_types=['private'], commands=['nick'])
@@ -190,7 +171,7 @@ def nick_handler(m):
     if not m.reply_to_message:
         bot.reply_to(m, '[BOT]: Реплай на юзера, которому бан!')
         return
-    message = mm.get_origin(m)
+    message = mm.get_message(m)
     if not message:
         bot.reply_to(m, 'Ошибка!')
         return
@@ -212,7 +193,7 @@ def nick_handler(m):
         return
     text = m.text.split(' ', 1)[1].replace('<', '&lt;').replace('>', '&gt;')
     user = get_user(m)
-    message = mm.get_origin(m)
+    message = mm.get_message(m)
     if not message:
         bot.reply_to(m, 'Ошибка!')
         return
@@ -228,78 +209,37 @@ def pm_handler(m):
     user = get_user(m)
     update_online(user)
     m.text = m.text.replace('<', '&lt;').replace('>', '&gt;')
-    message_keys = []
-    for anon in User.objects(room=user.room):
-        if m.reply_to_message:
-            message = mm.get_origin(m)
-            if message:
-                if message.private:
-                    bot.reply_to(m, '[BOT] сорян, еще не запилил')
-                    return
-            try:
-                num = mm.get_reply_number(m, anon)
-                botm = bot.send_message(anon.id, f'<b>{user.nick}</b>: {m.text}',
-                                        reply_to_message_id=num, parse_mode="HTML")
-            except Exception as e:
-                print(traceback.format_exc())
-                botm = bot.send_message(anon.id, f'<b>{user.nick}</b>: {m.text}', parse_mode="HTML")
-        else:
-            botm = bot.send_message(anon.id, f'<b>{user.nick}</b>: {m.text}', parse_mode="HTML")
-        message_keys.append(f"{anon.id} - {botm.message_id}")
-    message = Message(pairs=message_keys, origin=f"{m.from_user.id} - {m.message_id}")
-    message.save()
+    mm.process_text_message(user, m.text, m, bool(m.reply_to_message))
 
 
-@bot.message_handler(chat_types=['private'], content_types=['animation', 'photo'])
+@bot.message_handler(chat_types=['private'], content_types=['animation', 'photo', 'sticker'])
 def pm_handler(m):
     user = get_user(m)
     update_online(user)
     message_keys = []
-    if m.content_type == 'animation':
-        file_id = m.animation.file_id
-        send = bot.send_animation
+    keyboard = None
+    caption = None
+    if m.content_type == 'sticker':
+        keyboard = types.InlineKeyboardMarkup()
+        keyboard.add(types.InlineKeyboardButton(text=f"{user.nick}", callback_data="lmao"))
     else:
-        file_id = m.photo[0].file_id
-        send = bot.send_photo
-    caption = m.caption if m.caption else ''
+        caption = f"{user.nick}: {m.caption if m.caption else ''}"
     for anon in User.objects(room=user.room):
         if m.reply_to_message:
             try:
                 num = mm.get_reply_number(m, anon)
-                botm = send(anon.id, file_id, reply_to_message_id=num, caption=f"{user.nick}: {caption}")
-            except:
+                botm = bot.copy_message(anon.id, user.id, m.message_id, caption,
+                    parse_mode="HTML", reply_to_message_id=num, reply_markup=keyboard, allow_sending_without_reply=True)
+            except ApiTelegramException as e:
+                if e.description == blocked_exception:  # Handling the user, which blocked the bot
+                    mm.handle_user_block(anon)
                 print(traceback.format_exc())
-                botm = send(anon.id, file_id, caption=f"{user.nick}: {caption}")
         else:
-            botm = send(anon.id, file_id, caption=f"{user.nick}: {caption}")
-        message_keys.append(f"{anon.id} - {botm.message_id}")
-    message = Message(pairs=message_keys, origin=f"{m.from_user.id} - {m.message_id}")
-    message.save()
-
-
-@bot.message_handler(chat_types=['private'], content_types=['sticker'])
-def pm_handler(m):
-    user = get_user(m)
-    update_online(user)
-    message_keys = []
-    sticker = m.sticker.file_id
-    keyboard = types.InlineKeyboardMarkup()
-    keyboard.add(types.InlineKeyboardButton(text=f"{user.nick}", callback_data="lmao"))
-    for anon in User.objects(room=user.room):
-        if m.reply_to_message:
-            try:
-                num = mm.get_reply_number(m, anon)
-                botm = bot.send_sticker(anon.id, sticker, reply_markup=keyboard, reply_to_message_id=num)
-            except:
-                print(traceback.format_exc())
-                botm = bot.send_sticker(anon.id, sticker, reply_markup=keyboard)
-        else:
-            botm = bot.send_sticker(anon.id, sticker, reply_markup=keyboard)
+            botm = bot.copy_message(anon.id, user.id, m.message_id, caption, parse_mode="HTML", reply_markup=keyboard)
         message_keys.append(f"{anon.id} - {botm.message_id}")
     message = Message(pairs=message_keys, origin=f"{m.from_user.id} - {m.message_id}")
     message.save()
 
 
 print(7777)
-# bot.send_message(-1001251705571, 'Бот запущен~~~')
 bot.infinity_polling()

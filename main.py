@@ -130,9 +130,9 @@ def nick_handler(m):
 def nick_handler(m):
     user = get_user(m)
     keyboard = types.InlineKeyboardMarkup()
-    erooms = rooms.copy()
-    erooms.remove(user.room)
-    for room in erooms:
+    for room in Room.objects():
+        if user.room == room.name:
+            continue
         keyboard.add(types.InlineKeyboardButton(text=f"{room}", callback_data=f"r_{room}"))
     bot.reply_to(m, 'Выберите комнату, в которую хотите перейти:', reply_markup=keyboard)
 

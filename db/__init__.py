@@ -24,6 +24,11 @@ class Message(Document):
         return int(self.origin.split(' - ')[0]) if self.has_origin else None
 
     @property
+    def participants(self):
+        for pair in self.pairs:
+            yield int(pair.split(' - ')[0])
+
+    @property
     def has_origin(self):
         return self.origin and self.origin != 'NO_ORIGIN'
 

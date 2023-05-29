@@ -215,7 +215,10 @@ def pm_handler(m):
     user = get_user(m)
     update_online(user)
     m.text = m.text.replace('<', '&lt;').replace('>', '&gt;')
-    mm.process_text_message(user, m, bool(m.reply_to_message))
+    if not m.reply_to_message:
+        mm.process_text_message(user, m)
+    elif m.reply_to_message.from_user.id == mm.id:
+        mm.process_reply_text_message(user, m)
 
 
 @bot.message_handler(chat_types=['private'], content_types=['animation', 'photo', 'sticker'])

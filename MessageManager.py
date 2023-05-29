@@ -29,6 +29,12 @@ class MessageManager:
         return utils.get_value_by_key_from_list(anon.id, message.pairs)
 
     def get_message(self, replying_message):
+        """
+        replying_message must be from the bot. tries to get DB Message entry of the origin.
+        """
+        if replying_message.from_user.id != self.id:
+            return None
+
         pair = f"{replying_message.from_user.id} - {replying_message.reply_to_message.message_id}"
         try:
             result = Message.objects().get(pairs__in=[pair])
@@ -53,23 +59,42 @@ class MessageManager:
             except:
                 self.handle_user_block(anon)
 
-    def process_text_message(self, author: User, message, is_reply=False):
+    def process_text_message(self, author: User, message):
         message_keys = []
         for anon in User.objects(skipped=False):
             if anon.room != author.room and author.room not in anon.monitoring:
                 continue
             result = f'<b>{author.nick}</b>: {message.text}'
             result = f'<b>[{author.room}]</b>\n{result}' if author.room in anon.monitoring else result
-            if not is_reply:
-                key = self.deliver_text(anon, result)
-                message_keys.append(key)
-                continue
-            m_entry = self.get_message(message)
-            if m_entry and m_entry.private:
-                self.bot.reply_to(message, '[BOT] сорян, еще не запилил')  # TODO: Private replies
+            key = self.deliver_text(anon, result)
+            message_keys.append(key)
+            continue
+        message = Message(pairs=message_keys, origin=f"{author.id} - {message.message_id}")
+        message.save()
+
+    def process_reply_text_message(self, author: User, message: types.Message):
+        """
+        Reply can have these possibilities:
+        - reply on service message from the bot (no message entry in bd)
+        - reply on the own message (useless, being checked in the handler)
+
+        - reply on PM message, currently useless (TODO: Implement private replies)
+        - reply on the message from different room (crossreplying)
+        - reply on the message in the same room
+        """
+        message_keys = []
+        for anon in User.objects(skipped=False):
+            m_entry = self.get_message(message)  # Returns None in case of a service message
+            if m_entry and m_entry.private:  # TODO: Implement private replies
                 return
 
-            reply_id = self.get_reply_number(message, anon)
+            if anon.id not in m_entry.participants:  # Message was never delivered to anon, hence no reply is possible
+                continue
+
+            result = f'<b>{author.nick}</b>: {message.text}'
+            result = f'<b>[{author.room}]</b>\n{result}' if author.room in anon.monitoring else result
+
+            reply_id = self.get_reply_number(message, anon)  # Any errors must be fixed by participation check
             key = self.deliver_text(anon, result, reply_id)
 
             message_keys.append(key)

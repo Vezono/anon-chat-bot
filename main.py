@@ -8,7 +8,7 @@ from config import mongourl, bot_token, admin
 from MessageManager import MessageManager
 from telebot.apihelper import ApiTelegramException
 from exceptions import blocked_exception, replied_message_exception
-from utils import generate_id
+import utils
 
 connect(host=mongourl, db='mfhorning')
 bot = TeleBot(bot_token)
@@ -22,7 +22,7 @@ def get_user(m):
         user.skipped = False
         user.save()
     except:
-        id = generate_id()
+        id = utils.generate_id()
         user = User(id=m.from_user.id, anon_key=id, room="Основная/Оффтоп")
         user.save()
         bot.reply_to(m, f'Вьі новичок. Вам создан аккаунт с айди #{user.anon_key}.'
@@ -51,7 +51,7 @@ def edited_handler(m):
         print(traceback.format_exc())
         return
     for anon in User.objects:
-        num = mm.get_value_by_key_from_list(anon.id, pairs)
+        num = utils.get_value_by_key_from_list(anon.id, pairs)
         bot.edit_message_text(f'#<b>{user.nick}</b>: {m.text}', anon.id, num, parse_mode="HTML")
 
 

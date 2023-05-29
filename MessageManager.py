@@ -1,5 +1,5 @@
 from telebot import TeleBot, types
-
+import utils
 from db import User, Message, Room
 import traceback
 from telebot.apihelper import ApiTelegramException
@@ -26,11 +26,7 @@ class MessageManager:
     def get_reply_number(self, replying_message: types.Message, anon):
         pair = f"{replying_message.from_user.id} - {replying_message.reply_to_message.message_id}"
         message = Message.objects.get(pairs__in=[pair])
-        return self.get_value_by_key_from_list(anon.id, message.pairs)
-
-    def get_value_by_key_from_list(self, key, lst):
-        value = [pair for pair in lst if f"{key}" == pair.split(' - ')[0]][0].split(' - ')[1]
-        return value
+        return utils.get_value_by_key_from_list(anon.id, message.pairs)
 
     def get_message(self, replying_message):
         pair = f"{replying_message.from_user.id} - {replying_message.reply_to_message.message_id}"

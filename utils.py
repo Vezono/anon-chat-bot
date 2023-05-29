@@ -2,6 +2,11 @@ import random
 import string
 
 
+def get_value_by_key_from_list(key, lst):
+    value = [pair for pair in lst if f"{key}" == pair.split(' - ')[0]][0].split(' - ')[1]
+    return value
+
+
 def format_time(seconds):
     minutes = seconds // 60
     hours = minutes // 60

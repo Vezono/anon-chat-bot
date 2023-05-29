@@ -57,12 +57,12 @@ class MessageManager:
             except:
                 self.handle_user_block(anon)
 
-    def process_text_message(self, author: User, text, message, is_reply=False):
+    def process_text_message(self, author: User, message, is_reply=False):
         message_keys = []
         for anon in User.objects(skipped=False):
             if anon.room != author.room and author.room not in anon.monitoring:
                 continue
-            tts = f'<b>{author.nick}</b>: {text}'
+            tts = f'<b>{author.nick}</b>: {message.text}'
             tts = f'<b>[{author.room}]</b>\n{tts}' if author.room in anon.monitoring else tts
             if not is_reply:
                 key = self.deliver_text(anon, tts)

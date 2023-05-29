@@ -138,12 +138,15 @@ def switch_room_callback(c):
     user = get_user(c)
     room = c.data.split('_', 1)[1]
     old_room = user.room
+    user.monitoring.append(old_room) if old_room not in user.monitoring else None
     user.room = room
+    user.monitoring.remove(room) if room in user.monitoring else None
     user.save()
-    bot.edit_message_text(f"Вы перешли в комнату {room}!", message_id=c.message.message_id, chat_id=c.message.chat.id)
+    bot.edit_message_text(f"<b>[BOT]: Меню комнат</b>", message_id=c.message.message_id, chat_id=c.message.chat.id,
+                          reply_markup=mm.form_room_menu(user))
     for anon in User.objects(skipped=False):
         try:
-            bot.send_message(anon.id, f'[BOT]: {user.nick} перешел из "{old_room}" в "{room}"!')
+            bot.send_message(anon.id, f'➡️{user.nick} перешел из "{old_room}" в "{room}"!')
         except ApiTelegramException as e:
             if e.description == blocked_exception:
                 mm.handle_user_block(anon)

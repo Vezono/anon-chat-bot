@@ -15,6 +15,10 @@ bot = TeleBot(bot_token)
 log_chat = -1001593599607
 mm = MessageManager(bot)
 
+for user in User.objects:
+    user.skipped = False
+    user.save()
+
 
 def get_user(m):
     try:
@@ -25,11 +29,10 @@ def get_user(m):
         id = utils.generate_id()
         user = User(id=m.from_user.id, anon_key=id, room="Основная/Оффтоп")
         user.save()
-        bot.reply_to(m, f'Вьі новичок. Вам создан аккаунт с айди #{user.anon_key}.'
-                        f' Надеюсь вьі ознакомленьі с правилами анон РП.')
+        bot.reply_to(m, f'Приветствую! Вам создан аккаунт с айди #{user.anon_key}.')
         message_keys = []
-        for anon in User.objects:
-            botm = bot.send_message(anon.id, f'[BOT]: #{user.anon_key} присоединился (и попал в оффтоп комнату)!')
+        for anon in User.objects(skipped=False):
+            botm = bot.send_message(anon.id, f'🆕 #{user.anon_key} зарегистрировался!')
             message_keys.append(f"{anon.id} - {botm.message_id}")
         message = Message(pairs=message_keys)
         message.save()
@@ -87,8 +90,19 @@ def nick_handler(m):
     bot.reply_to(m, '[BOT]: Емоджи сохранен!')
 
 
-@bot.message_handler(chat_types=['private'], commands=['start'])
-def nick_handler(m):
+@bot.message_handler(chat_types=['private'], commands=['start'], func=lambda m: m.text.count(' '))
+def profile_link_handler(m):
+    user = get_user(m)
+    anon_id = m.text.split(' ')[1]
+    try:
+        anon = User.objects.get(anon_key=anon_id)
+        bot.reply_to(m, f'Профиль {anon.emoji}{anon.nick}:\n\n{anon.bio}')
+    except:
+        pass
+
+
+@bot.message_handler(chat_types=['private'], commands=['start'], func=lambda m: not m.text.count(' '))
+def start_handler(m):
     user = get_user(m)
     bot.reply_to(m, '[BOT]: Командьі: \n\n'
                     '/nick - сменить ник\n'
@@ -96,14 +110,6 @@ def nick_handler(m):
                     '/emoji - сменить свое емоджи\n'
                     '/bio - сменить био\n'
                     '/switch - переключить комнату')
-    if not m.text.count(' ') == 1:
-        return
-    anon_id = m.text.split(' ')[1]
-    try:
-        anon = User.objects.get(anon_key=anon_id)
-        bot.reply_to(m, f'Профиль {anon.emoji}{anon.nick}:\n\n{anon.bio}')
-    except:
-        pass
 
 
 @bot.message_handler(chat_types=['private'], commands=['nick'])
@@ -121,8 +127,8 @@ def nick_handler(m):
     bot.reply_to(m, '[BOT]: Ник сохранен!')
 
 
-@bot.message_handler(chat_types=['private'], commands=['switch'])
-def nick_handler(m):
+@bot.message_handler(chat_types=['private'], commands=['switch', 'rooms'])
+def switch_handler(m):
     user = get_user(m)
     keyboard = mm.form_room_menu(user)
     bot.reply_to(m, '<b>[BOT]: Меню комнат</b>', reply_markup=keyboard, parse_mode='HTML')
@@ -159,7 +165,7 @@ def monitor_room_callback(c):
 
 
 @bot.message_handler(chat_types=['private'], commands=['bio'])
-def nick_handler(m):
+def bio_handler(m):
     if m.text.count(' ') < 1:
         bot.reply_to(m, '[BOT]: Использовать так - /bio любой текст.')
         return
@@ -170,27 +176,8 @@ def nick_handler(m):
     bot.reply_to(m, '[BOT]: Био сохранено!')
 
 
-@bot.message_handler(chat_types=['private'], commands=['ban'])
-def nick_handler(m):
-    if m.from_user.id != admin or not m.reply_to_message:
-        return
-    if not m.reply_to_message:
-        bot.reply_to(m, '[BOT]: Реплай на юзера, которому бан!')
-        return
-    message = mm.get_message(m)
-    if not message:
-        bot.reply_to(m, 'Ошибка!')
-        return
-    if message.origin == 'NO_ORIGIN':
-        bot.reply_to(m, 'Ошибка!')
-        return
-    anon = User.objects.get(id=int(message.origin.split(' - ')[0]))
-    anon.banned = True
-    anon.save()
-
-
-@bot.message_handler(chat_types=['private'], commands=['msg', 'mgs', 'pm'])
-def nick_handler(m):
+@bot.message_handler(chat_types=['private'], commands=['msg', 'mgs', 'pm', 'msh', 'tell'])
+def msg_handler(m):
     if not m.reply_to_message:
         bot.reply_to(m, '[BOT]: Реплай на юзера, которому хотите написать приватное сообщение!')
         return
@@ -222,7 +209,7 @@ def pm_handler(m):
 
 
 @bot.message_handler(chat_types=['private'], content_types=['animation', 'photo', 'sticker'])
-def pm_handler(m):
+def media_handler(m):
     user = get_user(m)
     update_online(user)
     message_keys = []

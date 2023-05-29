@@ -14,6 +14,8 @@ def format_time(seconds):
     weeks = days // 7
     years = days // 365
     if years:
+        if years > 50:
+            return 'никогда'
         return f'{years} лет'
     elif weeks:
         return f'{weeks} недель'

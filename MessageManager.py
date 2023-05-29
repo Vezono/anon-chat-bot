@@ -63,12 +63,12 @@ class MessageManager:
         message_keys = []
         for anon in User.objects(skipped=False):
             if anon.room != author.room and author.room not in anon.monitoring:
+                print(anon.nick)
                 continue
             result = f'<b>{author.nick}</b>: {message.text}'
             result = f'<b>[{author.room}]</b>\n{result}' if author.room in anon.monitoring else result
             key = self.deliver_text(anon, result)
             message_keys.append(key)
-            continue
         message = Message(pairs=message_keys, origin=f"{author.id} - {message.message_id}")
         message.save()
 
@@ -104,6 +104,9 @@ class MessageManager:
         message.save()
 
     def deliver_text(self, recipient: User, text, reply_id=0):
+        """
+        Delivers text to the recipient, handles Telegram exceptions. Returns keys in case of success
+        """
         try:
             if reply_id:
                 result = self.bot.send_message(recipient.id, text, reply_to_message_id=reply_id,

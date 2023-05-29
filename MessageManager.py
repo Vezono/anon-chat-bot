@@ -62,10 +62,10 @@ class MessageManager:
         for anon in User.objects(skipped=False):
             if anon.room != author.room and author.room not in anon.monitoring:
                 continue
-            tts = f'<b>{author.nick}</b>: {message.text}'
-            tts = f'<b>[{author.room}]</b>\n{tts}' if author.room in anon.monitoring else tts
+            result = f'<b>{author.nick}</b>: {message.text}'
+            result = f'<b>[{author.room}]</b>\n{result}' if author.room in anon.monitoring else result
             if not is_reply:
-                key = self.deliver_text(anon, tts)
+                key = self.deliver_text(anon, result)
                 message_keys.append(key)
                 continue
             m_entry = self.get_message(message)
@@ -74,7 +74,7 @@ class MessageManager:
                 return
 
             reply_id = self.get_reply_number(message, anon)
-            key = self.deliver_text(anon, tts, reply_id)
+            key = self.deliver_text(anon, result, reply_id)
 
             message_keys.append(key)
         message = Message(pairs=message_keys, origin=f"{author.id} - {message.message_id}")

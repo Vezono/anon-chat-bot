@@ -1,3 +1,7 @@
+import random
+import string
+
+
 def format_time(seconds):
     minutes = seconds // 60
     hours = minutes // 60
@@ -16,3 +20,7 @@ def format_time(seconds):
         return f'{minutes} минут'
     else:
         return f'{seconds} секунд'
+
+
+def generate_id():
+    return ''.join(random.choice(string.ascii_uppercase) for _ in range(5))

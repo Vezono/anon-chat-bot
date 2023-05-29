@@ -17,9 +17,6 @@ log_chat = -1001593599607
 mm = MessageManager(bot)
 
 
-def generate_id():
-    return ''.join(random.choice(string.ascii_uppercase) for _ in range(5))
-
 
 def get_user(m):
     try:

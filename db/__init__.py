@@ -1,6 +1,31 @@
-from mongoengine import Document, StringField, IntField, BooleanField
+from mongoengine import Document, StringField, IntField, BooleanField, ListField, SequenceField
 from utils import format_time
 import time
+
+
+class Room(Document):
+    name = StringField(primary_key=True)
+
+    @property
+    def members(self):
+        return User.objects(room=self.name)
+
+
+class Message(Document):
+    id = SequenceField(primary_key=True, auto_increment=True)
+    pairs = ListField()
+    origin = StringField(default="")
+    private = BooleanField(default=False)
+
+    meta = {'collection': 'messages'}
+
+    @property
+    def author(self):
+        return int(self.origin.split(' - ')[0]) if self.has_origin else None
+
+    @property
+    def has_origin(self):
+        return self.origin and self.origin != 'NO_ORIGIN'
 
 
 class User(Document):
@@ -13,6 +38,9 @@ class User(Document):
     bio = StringField(default="Анон еще ничего сюда не написал!")
     banned = BooleanField(default=False)
     skipped = BooleanField(default=False)
+
+    def get_room(self):
+        return Room.objects.get(name=self.room)
 
     @property
     def nick(self):

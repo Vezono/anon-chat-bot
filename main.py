@@ -1,21 +1,18 @@
 import traceback
 import emoji as emj
 from telebot import TeleBot, types
-from db.User import User
-from db.Message import Message
+from db import User, Message, Room
 from mongoengine import connect
 import random
 import string
 import time
 from config import mongourl, bot_token, admin
 from MessageManager import MessageManager
-from utils import format_time
 from telebot.apihelper import ApiTelegramException
 from exceptions import blocked_exception, replied_message_exception
 
 connect(host=mongourl, db='mfhorning')
 bot = TeleBot(bot_token)
-rooms = ['Основная/Оффтоп', 'Ролеплей', 'Анкета']
 log_chat = -1001593599607
 mm = MessageManager(bot)
 
@@ -31,7 +28,7 @@ def get_user(m):
         user.save()
     except:
         id = generate_id()
-        user = User(id=m.from_user.id, anon_key=id, room=rooms[0])
+        user = User(id=m.from_user.id, anon_key=id, room="Основная/Оффтоп")
         user.save()
         bot.reply_to(m, f'Вьі новичок. Вам создан аккаунт с айди #{user.anon_key}.'
                         f' Надеюсь вьі ознакомленьі с правилами анон РП.')
@@ -66,9 +63,9 @@ def edited_handler(m):
 @bot.message_handler(chat_types=['private'], commands=['list', 'lust'])
 def nick_handler(m):
     tts = '<b>Для просмотра профиля, нажмите на емодзи!</b>\n'
-    for room in rooms:
-        tts += f'\n<b>{room}</b>:\n'
-        for anon in User.objects(room=room).order_by('-online'):
+    for room in Room.objects():
+        tts += f'\n<b>{room.name}</b>:\n'
+        for anon in room.members.order_by('-online'):
             tts += f'{anon.list_entry}\n'
     bot.reply_to(m, tts, parse_mode='HTML')
 

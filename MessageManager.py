@@ -1,7 +1,6 @@
 from telebot import TeleBot, types
 
-from db.User import User
-from db.Message import Message
+from db import User, Message, Room
 import traceback
 from telebot.apihelper import ApiTelegramException
 from exceptions import blocked_exception, replied_message_exception

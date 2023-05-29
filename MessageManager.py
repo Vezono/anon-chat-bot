@@ -85,6 +85,8 @@ class MessageManager:
         message_keys = []
         for anon in User.objects(skipped=False):
             m_entry = self.get_message(message)  # Returns None in case of a service message
+            if not m_entry:
+                return
             if m_entry and m_entry.private:  # TODO: Implement private replies
                 return
 

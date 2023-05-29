@@ -75,7 +75,7 @@ class MessageManager:
     def process_reply_text_message(self, author: User, message: types.Message):
         """
         Reply can have these possibilities:
-        - reply on service message from the bot (no message entry in bd)
+        - reply on service message from the bot (no message entry in DB, handled by participation check)
         - reply on the own message (useless, being checked in the handler)
 
         - reply on PM message, currently useless (TODO: Implement private replies)

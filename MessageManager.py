@@ -1,4 +1,4 @@
-from telebot import TeleBot
+from telebot import TeleBot, types
 
 from db.User import User
 from db.Message import Message
@@ -12,7 +12,7 @@ class MessageManager:
         self.id = bot.get_me().id
         self.bot: TeleBot = bot
 
-    def get_reply_number(self, replying_message, anon):
+    def get_reply_number(self, replying_message: types.Message, anon):
         pair = f"{replying_message.from_user.id} - {replying_message.reply_to_message.message_id}"
         message = Message.objects.get(pairs__in=[pair])
         return self.get_value_by_key_from_list(anon.id, message.pairs)
@@ -55,8 +55,8 @@ class MessageManager:
                 key = self.deliver_text(anon, f'<b>{author.nick}</b>: {text}')
                 message_keys.append(key)
                 continue
-            message = self.get_message(message)
-            if message and message.private:
+            m_entry = self.get_message(message)
+            if m_entry and m_entry.private:
                 self.bot.reply_to(message, '[BOT] сорян, еще не запилил')  # TODO: Private replies
                 return
 

@@ -148,8 +148,12 @@ def switch_room_callback(c):
     user.room = room
     user.save()
     bot.edit_message_text(f"Вы перешли в комнату {room}!", message_id=c.message.message_id, chat_id=c.message.chat.id)
-    for anon in User.objects():
-        bot.send_message(anon.id, f'[BOT]: {user.nick} перешел из "{old_room}" в "{room}"!')
+    for anon in User.objects(skipped=False):
+        try:
+            bot.send_message(anon.id, f'[BOT]: {user.nick} перешел из "{old_room}" в "{room}"!')
+        except ApiTelegramException as e:
+            if e.description == blocked_exception:
+                mm.handle_user_block(anon)
 
 
 @bot.message_handler(chat_types=['private'], commands=['bio'])
@@ -225,6 +229,8 @@ def pm_handler(m):
     else:
         caption = f"{user.nick}: {m.caption if m.caption else ''}"
     for anon in User.objects(room=user.room):
+        if anon.skipped:
+            continue
         if m.reply_to_message:
             try:
                 num = mm.get_reply_number(m, anon)

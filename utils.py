@@ -3,7 +3,10 @@ def format_time(seconds):
     hours = minutes // 60
     days = hours // 24
     weeks = days // 7
-    if weeks:
+    years = days // 365
+    if years:
+        return f'{years} лет'
+    elif weeks:
         return f'{weeks} недель'
     elif days:
         return f'{days} дней'

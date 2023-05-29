@@ -35,6 +35,7 @@ class User(Document):
     online = IntField(default=0)
     emoji = StringField(default="👤")
     room = StringField(default="Основная/Оффтоп", required=True)
+    monitoring = ListField()
     bio = StringField(default="Анон еще ничего сюда не написал!")
     banned = BooleanField(default=False)
     skipped = BooleanField(default=False)

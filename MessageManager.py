@@ -11,6 +11,18 @@ class MessageManager:
         self.id = bot.get_me().id
         self.bot: TeleBot = bot
 
+    def form_room_menu(self, user: User) -> types.InlineKeyboardMarkup:
+        keyboard = types.InlineKeyboardMarkup()
+        for room in Room.objects():
+            status = '👁✅' if room.name in user.monitoring else '👁☑️'
+            if user.room == room.name:
+                keyboard.add(types.InlineKeyboardButton(text=f"| {room.name} |", callback_data=f"rs_{room.name}"),
+                             types.InlineKeyboardButton(text=status, callback_data=f"rw_{room.name}"))
+            else:
+                keyboard.add(types.InlineKeyboardButton(text=f"{room.name}", callback_data=f"r_{room.name}"),
+                             types.InlineKeyboardButton(text=status, callback_data=f"rw_{room.name}"))
+        return keyboard
+
     def get_reply_number(self, replying_message: types.Message, anon):
         pair = f"{replying_message.from_user.id} - {replying_message.reply_to_message.message_id}"
         message = Message.objects.get(pairs__in=[pair])
@@ -45,13 +57,15 @@ class MessageManager:
             except:
                 self.handle_user_block(anon)
 
-    def process_text_message(self, author, text, message, is_reply=False):
+    def process_text_message(self, author: User, text, message, is_reply=False):
         message_keys = []
-        for anon in User.objects(room=author.room):  # TODO: Room subscription
-            if anon.skipped:
+        for anon in User.objects(skipped=False):
+            if anon.room != author.room and author.room not in anon.monitoring:
                 continue
+            tts = f'<b>{author.nick}</b>: {text}'
+            tts = f'<b>[{author.room}]</b>\n{tts}' if author.room in anon.monitoring else tts
             if not is_reply:
-                key = self.deliver_text(anon, f'<b>{author.nick}</b>: {text}')
+                key = self.deliver_text(anon, tts)
                 message_keys.append(key)
                 continue
             m_entry = self.get_message(message)
@@ -60,7 +74,7 @@ class MessageManager:
                 return
 
             reply_id = self.get_reply_number(message, anon)
-            key = self.deliver_text(anon, f'<b>{author.nick}</b>: {text}', reply_id)
+            key = self.deliver_text(anon, tts, reply_id)
 
             message_keys.append(key)
         message = Message(pairs=message_keys, origin=f"{author.id} - {message.message_id}")

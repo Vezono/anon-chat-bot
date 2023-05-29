@@ -129,12 +129,8 @@ def nick_handler(m):
 @bot.message_handler(chat_types=['private'], commands=['switch'])
 def nick_handler(m):
     user = get_user(m)
-    keyboard = types.InlineKeyboardMarkup()
-    for room in Room.objects():
-        if user.room == room.name:
-            continue
-        keyboard.add(types.InlineKeyboardButton(text=f"{room}", callback_data=f"r_{room}"))
-    bot.reply_to(m, 'Выберите комнату, в которую хотите перейти:', reply_markup=keyboard)
+    keyboard = mm.form_room_menu(user)
+    bot.reply_to(m, '<b>[BOT]: Меню комнат</b>', reply_markup=keyboard, parse_mode='HTML')
 
 
 @bot.callback_query_handler(func=lambda c: c.data.startswith('r_'))
@@ -151,6 +147,17 @@ def switch_room_callback(c):
         except ApiTelegramException as e:
             if e.description == blocked_exception:
                 mm.handle_user_block(anon)
+
+
+@bot.callback_query_handler(func=lambda c: c.data.startswith('rw_'))
+def monitor_room_callback(c):
+    user = get_user(c)
+    room = c.data.split('_', 1)[1]
+    user.monitoring.append(room) if room not in user.monitoring else user.monitoring.remove(room)
+    user.save()
+    keyboard = mm.form_room_menu(user)
+    bot.edit_message_text(f"<b>[BOT]: Меню комнат</b>", message_id=c.message.message_id,
+                          chat_id=c.message.chat.id, reply_markup=keyboard, parse_mode='HTML')
 
 
 @bot.message_handler(chat_types=['private'], commands=['bio'])
@@ -232,7 +239,8 @@ def pm_handler(m):
             try:
                 num = mm.get_reply_number(m, anon)
                 botm = bot.copy_message(anon.id, user.id, m.message_id, caption,
-                    parse_mode="HTML", reply_to_message_id=num, reply_markup=keyboard, allow_sending_without_reply=True)
+                                        parse_mode="HTML", reply_to_message_id=num, reply_markup=keyboard,
+                                        allow_sending_without_reply=True)
             except ApiTelegramException as e:
                 if e.description == blocked_exception:  # Handling the user, which blocked the bot
                     mm.handle_user_block(anon)

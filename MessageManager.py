@@ -32,7 +32,7 @@ class MessageManager:
         """
         replying_message must be from the bot. tries to get DB Message entry of the origin.
         """
-        if replying_message.from_user.id != self.id:
+        if replying_message.reply_to_message.from_user.id != self.id:
             return None
 
         pair = f"{replying_message.from_user.id} - {replying_message.reply_to_message.message_id}"

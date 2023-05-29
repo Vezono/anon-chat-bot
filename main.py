@@ -3,19 +3,17 @@ import emoji as emj
 from telebot import TeleBot, types
 from db import User, Message, Room
 from mongoengine import connect
-import random
-import string
 import time
 from config import mongourl, bot_token, admin
 from MessageManager import MessageManager
 from telebot.apihelper import ApiTelegramException
 from exceptions import blocked_exception, replied_message_exception
+from utils import generate_id
 
 connect(host=mongourl, db='mfhorning')
 bot = TeleBot(bot_token)
 log_chat = -1001593599607
 mm = MessageManager(bot)
-
 
 
 def get_user(m):
